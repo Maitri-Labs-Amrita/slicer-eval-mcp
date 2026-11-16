@@ -13,7 +13,7 @@ class SlicerMCPBridge(ScriptedLoadableModule):
         parent.title = "Slicer MCP Bridge"
         parent.categories = ["Developer Tools"]
         parent.dependencies = ["WebServer", "VolumeRendering"]
-        parent.contributors = ["MAITRI Labs, Amrita"]
+        parent.contributors = []
         parent.helpText = "Named-handler HTTP bridge (127.0.0.1, no exec) for the Slicer MCP server."
         parent.acknowledgementText = ""
         parent.hidden = True

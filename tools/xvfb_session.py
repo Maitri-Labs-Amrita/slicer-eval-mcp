@@ -38,11 +38,12 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "src"))
-from slicer_mcp.config import load_runtime  # noqa: E402
+if (REPO / "src" / "slicer_mcp").is_dir():  # a source checkout; an installed package is importable as it is
+    sys.path.insert(0, str(REPO / "src"))
+from slicer_mcp.config import base_dir, load_runtime  # noqa: E402
 
 DEFAULT_SCREEN = "1920x1200x24"
-LOG = REPO / "data" / "dev" / "xvfb_session.log"
+LOG = base_dir() / "data" / "dev" / "xvfb_session.log"
 STOP_WAIT_S = 10.0
 SETTLE_S = 1.0
 GRACE_S = 100.0

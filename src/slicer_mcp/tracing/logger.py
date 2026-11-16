@@ -15,7 +15,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from slicer_mcp.config import REPO
+from slicer_mcp.config import FROM_CHECKOUT, REPO
 
 STEP_FIELDS = ("step", "t", "model_reasoning", "tool", "args", "args_after_validation", "state_after", "frames",
                "view_ref", "result", "latency_ms", "tokens", "warnings", "error")
@@ -26,16 +26,31 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def git_info(repo: Path = REPO) -> dict:
-    """Commit of slicer-mcp and whether the working tree had uncommitted changes."""
+def git_info(repo: Path | None = None) -> dict:
+    """Commit of slicer-mcp and whether the working tree had uncommitted changes. From a source checkout: git. From
+    an installed package: the commit its installer recorded (direct_url.json, for an install from git), else None;
+    an installed package has no working tree, so dirty is False."""
+    if repo is None and not FROM_CHECKOUT:
+        return {"commit": installed_commit(), "dirty": False}
+
     def run(*a):
-        return subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True, timeout=10)
+        return subprocess.run(["git", "-C", str(repo or REPO), *a], capture_output=True, text=True, timeout=10)
     try:
         head = run("rev-parse", "HEAD")
         dirty = run("status", "--porcelain", "--untracked-files=no")
         return {"commit": head.stdout.strip() or None, "dirty": bool(dirty.stdout.strip())}
     except (OSError, subprocess.SubprocessError):
         return {"commit": None, "dirty": None}
+
+
+def installed_commit() -> str | None:
+    """The git commit the installed slicer-mcp package was built from (PEP 610 direct_url.json), or None."""
+    try:
+        from importlib.metadata import distribution
+        raw = distribution("slicer-mcp").read_text("direct_url.json")
+        return (json.loads(raw).get("vcs_info") or {}).get("commit_id") if raw else None
+    except Exception:
+        return None
 
 
 def new_episode_id(case_id: str, profile: str) -> str:

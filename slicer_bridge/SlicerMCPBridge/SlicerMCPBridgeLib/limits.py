@@ -29,6 +29,9 @@ CASE_ID_PATTERN = r"^[A-Za-z0-9_]{1,64}$"
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DEFAULT_CONFIG_PATH = os.path.join(_REPO, "profiles", "ct_basic", "protocol.json")
 DEFAULT_RUNTIME_PATH = os.path.join(_REPO, "config", "runtime.json")
+# A source checkout resolves relative runtime paths against itself; the copy shipped in an installed package
+# (slicer_mcp/_root) against Slicer's working folder, which `slicer-mcp launch` sets to the user's (config.base_dir).
+_FROM_CHECKOUT = os.path.isdir(os.path.join(_REPO, "src", "slicer_mcp"))
 STOCK_PRESETS_XML = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "presets", "presets.xml")
 STOCK_PRESETS_SHA256 = "5b9a6de6f4b4ab9f25c8d064d055adf8c3391581addf24db052cd03e929e65a0"
 
@@ -163,7 +166,8 @@ def _check():
 
 def load_runtime(path=None):
     """Deployment settings (host, port, paths). Not protocol: not hashed into traces.
-    Relative paths are resolved against the repo root. A non-loopback host is refused."""
+    Relative paths are resolved against the repo root (installed package: the working folder). A non-loopback host
+    is refused."""
     path = path or os.environ.get("SLICER_MCP_RUNTIME") or DEFAULT_RUNTIME_PATH
     with open(path) as f:
         rt = json.load(f)
@@ -174,7 +178,7 @@ def load_runtime(path=None):
         raise ValueError(f"bridge_host {rt['bridge_host']!r} is not loopback; refusing")
     for k in ("cases_dir", "traces_dir"):
         if not os.path.isabs(rt[k]):
-            rt[k] = os.path.join(_REPO, rt[k])
+            rt[k] = os.path.join(_REPO if _FROM_CHECKOUT else os.getcwd(), rt[k])
     return rt
 
 

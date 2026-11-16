@@ -39,7 +39,7 @@ import time
 import uuid
 from pathlib import Path
 
-from slicer_mcp.config import REPO, load_protocol, load_runtime
+from slicer_mcp.config import REPO, base_dir, load_protocol, load_runtime
 from slicer_mcp.jobenv import job_env
 
 DCM_PREFIX = "case_dcm_"
@@ -198,7 +198,7 @@ def _run_slicer(cmd, td, runtime, timeout_s, what) -> dict:
     if runtime:
         env["SLICER_MCP_RUNTIME"] = str(Path(runtime).resolve())
     try:
-        p = subprocess.run(cmd, cwd=REPO, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+        p = subprocess.run(cmd, cwd=base_dir(), env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
                            timeout=timeout_s)
     except subprocess.TimeoutExpired as e:
         raise CaseError(f"{what} timed out after {timeout_s} s") from e

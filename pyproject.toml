@@ -29,6 +29,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/slicer_mcp"]
+exclude = ["__pycache__", "*.pyc"]
+
+# The files that run outside the server's Python (the Slicer bridge module and the case converters run inside
+# Slicer; the headless setup is a shell script), the example profiles and the default runtime config ship in the
+# package with the checkout's layout, under slicer_mcp/_root/ (config.REPO when installed as a package).
+[tool.hatch.build.targets.wheel.force-include]
+"slicer_bridge" = "slicer_mcp/_root/slicer_bridge"
+"tools" = "slicer_mcp/_root/tools"
+"profiles" = "slicer_mcp/_root/profiles"
+"config/runtime.json" = "slicer_mcp/_root/config/runtime.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

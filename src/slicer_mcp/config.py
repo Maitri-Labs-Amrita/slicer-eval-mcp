@@ -24,7 +24,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+PKG = Path(__file__).resolve().parent
+_CHECKOUT = PKG.parents[1]
+# Run from a source checkout (an editable install), or installed as a package. The bridge, tools/, profiles/ and
+# config/runtime.json are the checkout's own files, or their copies shipped in the package under slicer_mcp/_root/.
+FROM_CHECKOUT = (_CHECKOUT / "slicer_bridge").is_dir() and (_CHECKOUT / "src" / "slicer_mcp").is_dir()
+REPO = _CHECKOUT if FROM_CHECKOUT else PKG / "_root"
 PROFILES = REPO / "profiles"
 DEFAULT_PROFILE = PROFILES / "ct_basic"
 DEFAULT_RUNTIME = REPO / "config" / "runtime.json"
@@ -157,6 +162,12 @@ def _import_file(path: Path, name: str):
     return mod
 
 
+def base_dir() -> Path:
+    """The folder that relative runtime paths (cases, traces, state file, logs) are resolved against: the checkout,
+    or for an installed package the current working directory."""
+    return REPO if FROM_CHECKOUT else Path.cwd()
+
+
 def missing_keys(data: dict, keys) -> list:
     """The keys (dotted for nested ones, e.g. "case_prep.nrrd_compression") that data lacks."""
     out = []
@@ -181,14 +192,14 @@ def load_runtime(path=None) -> dict:
         raise ValueError(f"bridge_host {rt['bridge_host']!r} is not loopback; refusing")
     for k in ("cases_dir", "traces_dir"):
         if not os.path.isabs(rt[k]):
-            rt[k] = str(REPO / rt[k])
+            rt[k] = str(base_dir() / rt[k])
     return rt
 
 
 def launch_state_path(rt: dict) -> Path:
-    """The launch state file named by runtime eval_launch.state_file (relative paths: the repo)."""
+    """The launch state file named by runtime eval_launch.state_file (relative paths: base_dir())."""
     p = Path(os.path.expanduser(str(rt.get("eval_launch", {}).get("state_file", DEFAULT_STATE_FILE))))
-    return p if p.is_absolute() else REPO / p
+    return p if p.is_absolute() else base_dir() / p
 
 
 def read_launch_state(rt: dict) -> dict | None:

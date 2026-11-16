@@ -37,8 +37,23 @@ import slicer
 import vtk
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO, "src"))
-from slicer_mcp import shell  # noqa: E402  (stdlib + numpy + SimpleITK only)
+
+
+def _load_shell():
+    """slicer_mcp/shell.py, loaded by its path (stdlib + numpy + SimpleITK only), so nothing else of the server's
+    environment enters Slicer's Python: from a source checkout src/slicer_mcp/shell.py; from an installed package
+    (this file is slicer_mcp/_root/tools/prepare_shell.py) slicer_mcp/shell.py."""
+    import importlib.util
+    for path in (os.path.join(REPO, "src", "slicer_mcp", "shell.py"), os.path.join(os.path.dirname(REPO), "shell.py")):
+        if os.path.exists(path):
+            spec = importlib.util.spec_from_file_location("slicer_mcp_shell", path)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    raise ImportError("slicer_mcp/shell.py not found next to tools/")
+
+
+shell = _load_shell()
 
 CROP_MARGIN_VOX = 8
 NRRD_ALLOWED_KEYS = {

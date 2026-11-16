@@ -16,13 +16,13 @@ import ast
 import difflib
 import sys
 
-from slicer_mcp.config import PROFILES, REPO, load_profile
+from slicer_mcp.config import PKG, PROFILES, REPO, load_profile
 from slicer_mcp.session import BRIDGE_TOOLS, RUNNER_TOOLS, SLICES, TOOL_SCHEMA_VERSION
 from slicer_mcp.tools.registry import MODEL_TOOLS, RUNNER_ONLY_META, instructions, tool_specs
 
 OUT_DIR = REPO / "docs" / "tools"
-SERVER_PY = REPO / "src" / "slicer_mcp" / "server.py"
-SESSION_PY = REPO / "src" / "slicer_mcp" / "session.py"
+SERVER_PY = PKG / "server.py"
+SESSION_PY = PKG / "session.py"
 BRIDGE_ENV_PY = REPO / "slicer_bridge" / "SlicerMCPBridge" / "SlicerMCPBridgeLib" / "env.py"
 
 SEMANTICS = {

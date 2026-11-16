@@ -51,7 +51,8 @@ from pathlib import Path
 
 import requests
 
-from slicer_mcp.config import REPO, TOKEN_ENV, launch_state_path, load_protocol, load_runtime, read_launch_state
+from slicer_mcp.config import (REPO, TOKEN_ENV, base_dir, launch_state_path, load_protocol, load_runtime,
+                               read_launch_state)
 from slicer_mcp.jobenv import job_env
 
 START_BRIDGE = REPO / "slicer_bridge" / "SlicerMCPBridge" / "start_bridge.py"
@@ -176,9 +177,9 @@ def check_launch(host, port, protocol, expect_launch="eval", dev_port=_UNSET, la
 
 
 def _repo_path(p) -> Path:
-    """A runtime path: absolute (or ~) as it is, else relative to the repo."""
+    """A runtime path: absolute (or ~) as it is, else relative to base_dir() (the checkout, or the working folder)."""
     p = Path(os.path.expanduser(str(p)))
-    return p if p.is_absolute() else REPO / p
+    return p if p.is_absolute() else base_dir() / p
 
 
 def _state_path(rt):
@@ -197,7 +198,7 @@ def write_state(path, state: dict):
 
 
 def _shown(p: Path) -> str:
-    return str(p.relative_to(REPO)) if p.is_relative_to(REPO) else str(p)
+    return str(p.relative_to(base_dir())) if p.is_relative_to(base_dir()) else str(p)
 
 
 def _alive(pid):
@@ -336,7 +337,7 @@ def start(a, rt, protocol):
                              runtime=a.runtime, port_file=port_file)
         log = open(log_path, "w")
         t0 = time.time()
-        proc = subprocess.Popen(cmd, cwd=REPO, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+        proc = subprocess.Popen(cmd, cwd=base_dir(), stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                 start_new_session=True, env=env)
         caff = None
         if el.get("caffeinate", True) and not a.no_caffeinate and sys.platform == "darwin":

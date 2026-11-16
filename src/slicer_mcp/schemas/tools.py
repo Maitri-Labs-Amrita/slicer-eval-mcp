@@ -118,7 +118,12 @@ def build_arg_models(profile) -> dict[str, type[ToolArgs]]:
                                                      "(0 = an ordinary thin slice); kept while scrolling")}
     zoom_view = {"view": (Literal["3d", "slices"] | None,
                           Field(None, description="'3d' (default) zooms the 3D view; 'slices' zooms the three slice "
-                                                  "views about the focus"))}
+                                                  "views about the focus"))} if profile.has_3d else {
+        # no 3D view (observation.views): zoom zooms the slices only, and the default is kept so the bridge gets it
+        # (an enum, not the JSON-schema `const` pydantic writes for one choice: model APIs take enums more widely)
+        "view": (Annotated[Literal["slices"], WithJsonSchema({"type": "string", "enum": ["slices"]})],
+                 Field("slices", description="'slices' (the only choice) zooms the three slice views about the "
+                                             "focus"))}
     delta_desc = f"whole slices to move (+ = towards S / R / A); clamped to +-{m}"
     delta = (Annotated[float, AfterValidator(_integral), AfterValidator(_clamp(-m, m)),
                        WithJsonSchema({"type": "integer", "minimum": -m, "maximum": m})],

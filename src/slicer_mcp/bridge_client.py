@@ -20,10 +20,9 @@ from dataclasses import dataclass, field
 
 import requests
 
-from .config import TOKEN_ENV, bridge_url, launch_token
+from .config import TOKEN_ENV, VIEWS, bridge_url, launch_token
 from .finite import nonfinite_paths
 
-VIEWS = ("3d", "axial", "sagittal", "coronal")
 LAUNCH_ENV = "SLICER_MCP_LAUNCH_NONCE"
 REFUSALS = ("unauthorized", "wrong_launch", "episode_owned", "episode_mismatch", "episode_required", "duplicate_in_flight",
             "invalid_envelope", "busy")

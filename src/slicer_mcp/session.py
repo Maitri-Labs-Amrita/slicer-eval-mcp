@@ -2,7 +2,7 @@
 
 The MCP server is a thin layer over this: it validates args (Pydantic), lists the profile's tools and turns a
 StepOutcome into MCP content. Logging happens here, so the trace is identical whoever drives it. Step 0 of every
-trace is the runner's reset_episode (the initial observation: all four views).
+trace is the runner's reset_episode (the initial observation: every view of the profile, observation.views).
 
 The profile's allowlist is enforced here too (defence in depth): a tool outside it is refused and logged.
 
@@ -84,7 +84,7 @@ class EnvSession:
         self.protocol = profile.protocol
         self.traces_dir = traces_dir
         self.tools = RUNNER_TOOLS + profile.tools
-        self.views = VIEWS
+        self.views = profile.views  # the profile's live views (observation.views): nothing else is ever captured
         self.ping_info = ping_info or client.ping()
         self.logger: TraceLogger | None = None
         self.episode: EpisodeSession | None = None

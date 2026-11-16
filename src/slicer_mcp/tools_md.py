@@ -24,7 +24,6 @@ OUT_DIR = REPO / "docs" / "tools"
 SERVER_PY = REPO / "src" / "slicer_mcp" / "server.py"
 SESSION_PY = REPO / "src" / "slicer_mcp" / "session.py"
 BRIDGE_ENV_PY = REPO / "slicer_bridge" / "SlicerMCPBridge" / "SlicerMCPBridgeLib" / "env.py"
-VIEWS = ("3d", "axial", "sagittal", "coronal")
 
 SEMANTICS = {
     "reset_episode": "runner only: load the case, restore the deterministic initial view, start a new trace (step 0); "
@@ -211,18 +210,21 @@ def _views(vs) -> str:
     return ", ".join(vs) if vs else "none"
 
 
-def _frames(spec) -> str:
+def _frames(spec, views) -> str:
+    """The frames a tool returns, among the profile's live views (EnvSession cuts every capture to them)."""
     if spec.name in BRIDGE_TOOLS:
         frames_for = BRIDGE_TOOLS[spec.name][1]
         per_view = {v: tuple(frames_for({"view": v})) for v in SLICES}
         if "view" in spec.input_schema.get("properties", {}) and all(per_view[v] == (v,) for v in SLICES):
             base = "the slice view named by `view`"
         else:
-            base = _views(tuple(frames_for({})))
+            default = spec.model.model_fields.get("view")
+            args = {"view": default.default} if default is not None and default.default is not None else {}
+            base = _views(tuple(v for v in frames_for(args) if v in views))
     else:
-        base = {"all": f"every view ({_views(VIEWS)})", "none": "none"}[SESSION_FRAMES[spec.name]]
+        base = {"all": f"every view ({_views(views)})", "none": "none"}[SESSION_FRAMES[spec.name]]
     if "composite" in spec.input_schema.get("properties", {}):
-        base += f"; with `composite: true`, every view ({_views(VIEWS)})"
+        base += f"; with `composite: true`, every view ({_views(views)})"
     return base
 
 
@@ -249,7 +251,7 @@ def render(profile) -> str:
          "Descriptions, instructions and schemas below are exactly what the MCP server sends to the model.", "",
          "## Overview", ""]
     L += _table(["Tools (model)", "Runner-only", "Live views", "Bridge state keys (traced)"],
-                [[str(len(p.tools)), ", ".join(_code(t) for t in RUNNER_TOOLS), _views(VIEWS),
+                [[str(len(p.tools)), ", ".join(_code(t) for t in RUNNER_TOOLS), _views(p.views),
                   ", ".join(_code(k) for k in _state_keys())]])
     L += ["", f"Runner-only tools carry the tool `_meta` `{{\"{RUNNER_ONLY_META}\": true}}`; the client must hide "
           "them from the model.", ""]
@@ -268,7 +270,7 @@ def render(profile) -> str:
         flags = [f"title: {s.title}", f"read-only: {'yes' if s.read_only else 'no'}",
                  f"runner-only: {'yes' if s.runner_only else 'no'}"]
         L += ["", f"### `{s.name}`" + (" (runner only)" if s.runner_only else ""), "",
-              "- " + "\n- ".join(flags), f"- returns frames: {_frames(s)}", f"- semantics: {SEMANTICS[s.name]}", "",
+              "- " + "\n- ".join(flags), f"- returns frames: {_frames(s, p.views)}", f"- semantics: {SEMANTICS[s.name]}", "",
               "Description:", ""] + _fenced(s.description) + [""]
         rows = _rows(s.input_schema)
         if rows:

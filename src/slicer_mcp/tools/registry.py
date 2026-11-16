@@ -4,6 +4,10 @@ The descriptions are part of the task protocol (the model reads them). Values (b
 directions, the segmentation's classes and colours) come from the profile's protocol.json, and submit_report's text
 from its report plugin. Any change to a name, schema or description needs a TOOL_SCHEMA_VERSION bump. Nothing here
 may name a case: descriptions are identical for every case.
+
+A profile without the "3d" view (observation.views) offers no THREED_TOOLS, and the descriptions it gets name no 3D
+view: the 3D sentences are left out and zoom zooms the slices only. With the 3D view every text is as before, byte for
+byte.
 """
 
 from dataclasses import dataclass
@@ -34,9 +38,14 @@ MODEL_TOOLS = ("reset_view", "bookmark_view", "submit_report", "set_slice", "scr
                "set_3d_content", "set_slice_outlines", "center_on_segments", "measure")
 SEG_TOOLS = ("set_segment_visibility", "set_segment_opacity", "set_3d_content", "set_slice_outlines",
              "center_on_segments")
+# The tools that act on (or only return) the 3D view: a profile without the "3d" view may not offer them. zoom stays
+# (it zooms the slices), and so does set_segment_visibility (it also changes the slice outlines).
+THREED_TOOLS = ("orbit", "set_view_direction", "pan_to", "set_render_preset", "set_clip_box", "set_clip_plane",
+                "clear_clip", "set_segment_opacity", "set_3d_content", "center_on_segments")
 _AXIS_WORD = {(1, 0, 0): "patient right", (-1, 0, 0): "patient left", (0, 1, 0): "anterior",
               (0, -1, 0): "posterior", (0, 0, 1): "superior", (0, 0, -1): "inferior"}
 VIEWS_PHRASE = "the 3D view and the axial, sagittal and coronal slice views"
+SLICE_VIEWS_PHRASE = "the axial, sagittal and coronal slice views"  # a profile without the 3D view
 
 
 @dataclass(frozen=True)
@@ -58,7 +67,8 @@ def describe(profile) -> dict[str, str]:
     """tool -> model-facing description for this profile."""
     protocol = profile.protocol
     wl, cam, clip, render = protocol["window_level"], protocol["camera"], protocol["clip"], protocol["render"]
-    views = VIEWS_PHRASE
+    has_3d = profile.has_3d
+    views = VIEWS_PHRASE if has_3d else SLICE_VIEWS_PHRASE
     m = protocol["slices"]["scroll_max_slices"]
     px = protocol["observation"]["size_px"] - 1
     az, el, ro = cam["orbit_azimuth_range"], cam["orbit_elevation_range"], cam["orbit_roll_range"]
@@ -96,9 +106,11 @@ def describe(profile) -> dict[str, str]:
             "changing nothing, and logs them as a step (the first observation after the runner's own calls). "
             "Returns the current state and images."),
         "reset_view": (
-            "Restore the initial view: camera, zoom, render preset, clipping, slice positions and window/level, "
-            "the slice zoom, slabs and measure line"
-            + (", and the structures (all shown, opaque, the 3D content and slice outlines at their start values). "
+            "Restore the initial view: "
+            + ("camera, zoom, render preset, clipping, " if has_3d else "")
+            + "slice positions and window/level, the slice zoom, slabs and measure line"
+            + ((", and the structures (all shown, opaque, the 3D content and slice outlines at their start values). "
+                if has_3d else ", and the structures (all shown, slice outlines at their start values). ")
                if has_seg else ". ")
             + f"Returns {views}."),
         "bookmark_view": (
@@ -120,7 +132,7 @@ def describe(profile) -> dict[str, str]:
             f"with a warning. Returns that slice view and how far it moved (moved_slices, moved_mm)."),
         "set_window_preset": (
             f"Set the grey-scale window/level of the slice views to a preset: {wl_list}. "
-            + "Slice views only; the 3D rendering is not affected. "
+            + ("Slice views only; the 3D rendering is not affected. " if has_3d else "Slice views only. ")
             + wl_note
             + "Returns the three slice views."),
         "jump_to_point": None,
@@ -134,7 +146,7 @@ def describe(profile) -> dict[str, str]:
         "set_view_direction": (
             "Look at the patient from one side: " + ", ".join(ups) + ". Keeps the current focal point and zoom; "
             "only the viewing direction and the screen's up direction change. Returns the 3D view."),
-        "zoom": (
+        "zoom": ((
             f"Zoom the 3D view by a factor relative to the current zoom (> 1 = closer, < 1 = farther), "
             f"{_g(zs[0])} to {_g(zs[1])} per call. The total zoom relative to the initial view stays within "
             f"[{_g(zc[0])}, {_g(zc[1])}] (clamped, with a warning). Returns the 3D view."
@@ -142,7 +154,12 @@ def describe(profile) -> dict[str, str]:
               f"the total slice zoom stays within [{_g(sz[0])}, {_g(sz[1])}] (clamped, with a warning), the slice "
               f"views are re-centred on the focus whenever point_at or jump_to_point moves it "
               f"(set_slice and scroll_slice do not pan them), and reset_view (or zooming back to 1) shows the whole "
-              f"slice again. Returns the three slice views."),
+              f"slice again. Returns the three slice views.") if has_3d else (
+            f"Zoom the three slice views by a factor relative to the current slice zoom (> 1 = closer, < 1 = "
+            f"farther), {_g(zs[0])} to {_g(zs[1])} per call, about the focus (where they cross): the total slice zoom "
+            f"stays within [{_g(sz[0])}, {_g(sz[1])}] (clamped, with a warning), the slice views are re-centred on "
+            f"the focus whenever point_at or jump_to_point moves it (set_slice and scroll_slice do not pan them), and "
+            f"reset_view (or zooming back to 1) shows the whole slice again. Returns the three slice views.")),
         "pan_to": (
             f"Move the 3D camera's focal point (the image centre and the centre of rotation) to a point [R, A, S] "
             f"in mm, or, with no point, to the focus (where the three slice views cross); the viewing direction "
@@ -178,7 +195,7 @@ def describe(profile) -> dict[str, str]:
         f"the focus: the other two slice views move through it, and the view you pointed at stays where it "
         f"is. result.ras is the point "
         f"[R, A, S] in mm." + seg_point + hu_note + zoom_note
-        + " pan_to and set_clip_box use the focus when you give them no point. "
+        + (" pan_to and set_clip_box use the focus when you give them no point. " if has_3d else " ")
         + "Returns the three slice views.")
     d["set_clip_box"] = (
         f"Crop the 3D rendering to an axis-aligned box: keep only what lies inside the box centred at "
@@ -211,8 +228,9 @@ def describe(profile) -> dict[str, str]:
             "set_segment_visibility": (
                 f"Show or hide individual structure shells ({legend}). show is applied first, then hide, so show "
                 f"['all'] with hide ['{example}'] shows everything but {example}; a name in both is an error. Hidden "
-                f"structures disappear from the 3D view and from the slice outlines. Showing a shown structure or "
-                f"hiding a hidden one gives a warning. " + bad_name + "Returns the 3D view and the three slice views."),
+                f"structures disappear from " + ("the 3D view and from " if has_3d else "") + "the slice outlines. "
+                "Showing a shown structure or hiding a hidden one gives a warning. " + bad_name + "Returns "
+                + ("the 3D view and " if has_3d else "") + "the three slice views."),
             "set_segment_opacity": (
                 f"Set the 3D opacity of one structure shell, or of all ('all'), from {_g(lo_o)} (invisible) to "
                 f"{_g(hi_o)} (opaque) (clamped, with a warning): a see-through shell shows what lies behind or inside "
@@ -258,4 +276,4 @@ def tool_specs(profile) -> list[ToolSpec]:
 
 
 __all__ = ["ToolSpec", "tool_specs", "describe", "instructions", "RUNNER_ONLY_META", "TOOL_SCHEMA_VERSION",
-           "MODEL_TOOLS", "SEG_TOOLS"]
+           "MODEL_TOOLS", "SEG_TOOLS", "THREED_TOOLS"]

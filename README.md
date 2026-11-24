@@ -23,15 +23,14 @@ The current version is 0.1.0. The tool definitions are fixed for this version to
 
 ## Features
 
-- **Tool access:** The model can call only the defined tools, whose arguments have explicit types. The bridge has
-  no code execution route, listens on 127.0.0.1 and requires a token generated for each launch.
-- **Scan formats:** The server prepares DICOM folders, NIfTI files and NRRD files as temporary anonymised cases.
-- **Task profiles:** Each profile folder defines the allowed tools, image size, presets, argument bounds and
-  report format.
-- **Session records:** Each tool call is recorded with the profile's hashes. The `replay` command renders the
-  recorded views again and compares the frames.
-- **Headless and parallel operation:** The server runs on Linux without a GPU or screen. Multiple Slicer
-  instances can run in parallel, each on its own port.
+- **Defined tools:** Clients control Slicer through the available tools. Arbitrary code execution is not supported.
+- **Scan formats:** Load scans from DICOM folders, NIfTI files or NRRD files.
+- **Custom task profiles:** Choose the tools, image size, presets, argument bounds and optional report format for
+  your task. Profiles make it easy to compare different evaluation settings without modifying the server.
+- **Reproducible sessions:** Traces record each tool call, its results and the profile's hashes. Use `replay` to
+  render the recorded views again, compare frames and inspect what happened during a session.
+- **Headless and parallel operation:** Run evaluations on a Linux server without a screen or GPU. Run multiple
+  Slicer instances in parallel to test different cases or models at the same time.
 
 ## Requirements
 
@@ -48,8 +47,7 @@ cd slicer-eval-mcp
 uv sync --inexact
 ```
 
-Configure the path to your 3D Slicer installation. On a Linux server, `uv run slicer-mcp setup-headless`
-sets this path for you. On other systems, create a local runtime configuration and select it for the current shell:
+Create a local runtime configuration and select it for the current shell:
 
 ```bash
 cp config/runtime.json config/runtime.local.json      # your copy (gitignored)
@@ -61,43 +59,57 @@ In `config/runtime.local.json`, set `slicer_executable` to the path of your Slic
 `"/opt/Slicer-5.10.0-linux-amd64/Slicer"` (Linux). The file also sets the local port Slicer listens on
 (`bridge_port`, 2017) and the folders for prepared cases (`cases_dir`) and run traces (`traces_dir`).
 
-To use slicer-mcp as a dependency of another project, install it with the following command and replace `<commit>`
-with the commit you want to use. The package includes the Slicer bridge and its helper scripts.
+### Use in a benchmark
+
+The package includes the Slicer bridge and its helper scripts, so you can use it as a dependency in your own
+benchmark. Your runner manages cases and model calls, while slicer-mcp provides the Slicer tools and session
+traces. [CHD-Bench](https://github.com/Maitri-Labs-Amrita/CHD-Bench) uses this structure to evaluate agents on
+cardiac CT and MRI scans.
+
+For example, run the following command from your benchmark project to add slicer-mcp as a dependency. Replace
+`<commit>` with the commit you want to use so your benchmark uses a fixed version:
 
 ```bash
 uv add "slicer-mcp @ git+https://github.com/Maitri-Labs-Amrita/slicer-eval-mcp@<commit>"
 ```
 
-When installed as a dependency, relative paths for cases, traces and logs in the runtime configuration are resolved
-from the working directory.
-
 ## Quick start
 
-On a Linux server without a screen, first open a shell on a virtual display and run everything below inside it:
+The steps below use a Linux desktop with Slicer installed and configured as described above. For a server without
+a display, first follow [Headless Linux](#headless-linux).
 
-```bash
-uv run slicer-mcp xvfb-session --runtime config/runtime.local.json -- bash
-```
+1. Start Slicer with the bridge and prepare a scan:
 
-```bash
-uv run slicer-mcp launch --profile ct_basic                 # start Slicer with the bridge
-uv run slicer-mcp case prepare --volume scan.nii.gz         # or --dicom <folder>; prints case_id and lease
-# ... run your client (next sections); it starts `slicer-mcp serve` itself
-uv run slicer-mcp case remove <case_id> --lease <lease>
-uv run slicer-mcp launch --stop
-```
+   ```bash
+   uv run slicer-mcp launch --profile ct_basic
+   uv run slicer-mcp case prepare --volume /path/to/scan.nii.gz
+   ```
 
-After preparing a case and before removing it, you can test the server without a model by running the scripted
-client. This client calls every tool:
+   For a DICOM folder, replace `--volume /path/to/scan.nii.gz` with `--dicom /path/to/dicom_folder`.
+   The preparation command prints a `case_id` and a `lease`. Keep both values for the following steps.
 
-```bash
-uv run python examples/scripted_episode.py out/ <case_id> slicer_mcp/ -- \
-    uv run slicer-mcp serve --profile ct_basic --runtime config/runtime.local.json
-```
+2. Run the scripted client to test the tools without a model. Replace `<case_id>` with the value printed above:
 
-The client writes replies to `out/` and uses `slicer_mcp/` as the prefix for the extra fields logged with each call.
-The `ct_basic` profile excludes the five segmentation tools, so calls to those tools are rejected as expected.
-Traces are saved in `traces/<episode_id>/`, which contains `steps.jsonl`, a `frames/` directory and the report.
+   ```bash
+   uv run python examples/scripted_episode.py out/ <case_id> slicer_mcp/ -- \
+       uv run slicer-mcp serve --profile ct_basic --runtime config/runtime.local.json
+   ```
+
+   The client starts the MCP server and calls every tool. The `ct_basic` profile excludes the five segmentation
+   tools, so calls to those tools are rejected as expected. To connect a model, use your own runner or an MCP host
+   as described in the following sections.
+
+   Replies are saved in `out/`. Session traces are saved in `traces/<episode_id>/`, including `steps.jsonl`,
+   a `frames/` directory and the report. The `slicer_mcp/` argument sets the prefix for extra fields logged with
+   each call.
+
+3. When you have finished, remove the prepared case and stop Slicer. Replace `<case_id>` and `<lease>` with the
+   values from step 1:
+
+   ```bash
+   uv run slicer-mcp case remove <case_id> --lease <lease>
+   uv run slicer-mcp launch --stop
+   ```
 
 ## Use from your own runner
 
@@ -187,11 +199,16 @@ segmentation tools. The full descriptions and argument schemas provided to the m
 
 ## Profiles
 
-A profile defines the tools available to the model, the allowed range of each argument, the window and rendering
-presets, the image size, the segmentation structures and the report format. Changing the profile changes what the
-model can see and do without changing the server. Each trace records the profile's hashes to identify the exact
-configuration used for that run. For example, CHD-Bench uses three profiles for its full configuration,
-configuration without a 3D view and configuration without segmentation.
+Use a profile to configure Slicer for your evaluation. You can choose which tools the model uses, set image sizes
+and argument bounds, and supply presets for slice display and volume rendering. You can also choose which
+segmentation structures to display and define a report format for the model's answer.
+
+To compare evaluation settings, create a profile for each setting and select it when launching Slicer and starting
+the MCP server. No server changes are needed. Each trace records the profile's hashes so you can identify the
+configuration used in a run.
+
+For example, [CHD-Bench](https://github.com/Maitri-Labs-Amrita/CHD-Bench) uses separate profiles for its full
+configuration, its evaluation without a 3D view and its evaluation without segmentation.
 
 Each profile is a folder containing the following files:
 
@@ -227,13 +244,13 @@ rendering hardware for runs whose frames you intend to compare.
 
 ## Security
 
-- The model can only call the profile's named tools. Any other call is refused and logged. There is no code
-  execution route in the bridge.
+- The MCP client can call the tools enabled by the profile and the runner-only tools for managing episodes.
+  The evaluation runner is responsible for hiding runner-only tools from the model. Arbitrary code execution
+  is not supported.
 - Every argument is validated against its schema and the profile's bounds; out-of-range values are clamped, with a
   warning in the result.
 - The bridge listens only on 127.0.0.1 and requires the token generated for the current launch.
-- `case prepare` copies the scan into a temporary anonymised case, so the model never sees file names or patient
-  fields. It cannot remove text burned into the images: use de-identified scans.
+- You are responsible for de-identifying scans before use, including any identifying text burned into the images.
 - Report plugins (`serve --report`) execute Python code in the server. Use only plugins you trust.
 
 ## Tests

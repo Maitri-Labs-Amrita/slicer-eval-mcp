@@ -1,13 +1,15 @@
 # slicer-mcp
 
-An MCP server that lets vision-language-model agents operate [3D Slicer](https://www.slicer.org). The model examines
-a volumetric scan through named tools (3D view control, rendering presets, clipping, slices, measurements, segmentation
-display); there is no code execution. Every call is logged with its arguments, the resulting state and the images,
-so a session can be audited, replayed and scored.
+slicer-mcp is an MCP server through which vision-language model agents operate [3D Slicer](https://www.slicer.org).
+The model examines a volumetric scan using tools for controlling the 3D view, selecting rendering presets,
+clipping, viewing slices, taking measurements and displaying segmentations. The tools do not execute model-generated
+code. Every tool call is logged with its arguments, the resulting state and the images, so a session can be
+audited, replayed and scored.
 
 ![3D Slicer and the MCP tool groups](docs/images/overview.png)
 
-Example views returned to the model (segmentation shells in 3D, one structure isolated, sagittal and coronal slices):
+The images below show example views returned to the model: segmentation shells in 3D, an isolated structure,
+and sagittal and coronal slices.
 
 ![Example views](docs/images/agent_views.png)
 
@@ -17,15 +19,19 @@ MCP client ──stdio──► slicer-mcp serve --profile P ──HTTP 127.0.0.
                        enforces the tool allowlist, writes the trace)            coronal views)
 ```
 
-Version 0.1.0. The tools are frozen at this version so results reproduce.
+The current version is 0.1.0. The tool definitions are fixed for this version to support reproducible evaluations.
 
 ## Features
 
-- **Secure:** only named, typed tools; no exec route; the bridge listens on 127.0.0.1 and requires a per-launch token.
-- **Clinical input:** DICOM folders, NIfTI, NRRD, converted to temporary anonymised cases.
-- **Task profiles:** one folder sets the tool allowlist, image size, presets, bounds and the report format.
-- **Auditable:** per-call traces stamped with the profile's hashes; `replay` re-renders a trace and compares frames.
-- **Headless and parallel:** runs on a Linux server without a GPU or a screen, one Slicer per port.
+- **Tool access:** The model can call only the defined tools, whose arguments have explicit types. The bridge has
+  no code execution route, listens on 127.0.0.1 and requires a token generated for each launch.
+- **Scan formats:** The server prepares DICOM folders, NIfTI files and NRRD files as temporary anonymised cases.
+- **Task profiles:** Each profile folder defines the allowed tools, image size, presets, argument bounds and
+  report format.
+- **Session records:** Each tool call is recorded with the profile's hashes. The `replay` command renders the
+  recorded views again and compares the frames.
+- **Headless and parallel operation:** The server runs on Linux without a GPU or screen. Multiple Slicer
+  instances can run in parallel, each on its own port.
 
 ## Requirements
 
@@ -42,27 +48,28 @@ cd slicer-eval-mcp
 uv sync --inexact
 ```
 
-Then tell slicer-mcp where 3D Slicer is on your machine. On a Linux server, `uv run slicer-mcp setup-headless`
-does this. Otherwise:
+Configure the path to your 3D Slicer installation. On a Linux server, `uv run slicer-mcp setup-headless`
+sets this path for you. On other systems, create a local runtime configuration and select it for the current shell:
 
 ```bash
 cp config/runtime.json config/runtime.local.json      # your copy (gitignored)
 export SLICER_MCP_RUNTIME=config/runtime.local.json   # every slicer-mcp command now reads it
 ```
 
-In `config/runtime.local.json`, set `slicer_executable` to your Slicer, e.g.
+In `config/runtime.local.json`, set `slicer_executable` to the path of your Slicer executable, for example
 `"/Applications/Slicer.app/Contents/MacOS/Slicer"` (macOS, the default) or
 `"/opt/Slicer-5.10.0-linux-amd64/Slicer"` (Linux). The file also sets the local port Slicer listens on
 (`bridge_port`, 2017) and the folders for prepared cases (`cases_dir`) and run traces (`traces_dir`).
 
-**As a dependency of another project.** The package ships the Slicer bridge and its helper scripts, so it can be
-installed like any library, pinned to a commit:
+To use slicer-mcp as a dependency of another project, install it with the following command and replace `<commit>`
+with the commit you want to use. The package includes the Slicer bridge and its helper scripts.
 
 ```bash
 uv add "slicer-mcp @ git+https://github.com/Maitri-Labs-Amrita/slicer-eval-mcp@<commit>"
 ```
 
-Installed this way, relative paths in the runtime config (cases, traces, logs) are relative to the working folder.
+When installed as a dependency, relative paths for cases, traces and logs in the runtime configuration are resolved
+from the working directory.
 
 ## Quick start
 
@@ -80,21 +87,22 @@ uv run slicer-mcp case remove <case_id> --lease <lease>
 uv run slicer-mcp launch --stop
 ```
 
-To try it without a model, run the scripted client, which calls every tool:
+After preparing a case and before removing it, you can test the server without a model by running the scripted
+client. This client calls every tool:
 
 ```bash
 uv run python examples/scripted_episode.py out/ <case_id> slicer_mcp/ -- \
     uv run slicer-mcp serve --profile ct_basic --runtime config/runtime.local.json
 ```
 
-`out/` gets the replies; `slicer_mcp/` is the prefix of the extra fields it logs with each call. With `ct_basic`,
-the 5 segmentation tools are refused: that shows the tool allowlist working, not a failure. Traces go to
-`traces/<episode_id>/` (`steps.jsonl`, `frames/`, the report).
+The client writes replies to `out/` and uses `slicer_mcp/` as the prefix for the extra fields logged with each call.
+The `ct_basic` profile excludes the five segmentation tools, so calls to those tools are rejected as expected.
+Traces are saved in `traces/<episode_id>/`, which contains `steps.jsonl`, a `frames/` directory and the report.
 
 ## Use from your own runner
 
-This is the intended use: an evaluation runner starts the server, loads a case and passes the model's tool calls
-through. After `launch` and `case prepare`:
+For evaluations, use a runner that starts the MCP server, loads a case and forwards the model's tool calls to the
+server. After running `launch` and `case prepare`, use the following example to connect the runner:
 
 ```python
 import asyncio, json
@@ -114,16 +122,18 @@ async def main():
 asyncio.run(main())
 ```
 
-- Each result is one JSON text block `{step_index, state, result, warnings, error, frames}` followed by one PNG per
-  view in `frames`.
-- The model ends the session with `submit_report`. By default it takes any JSON object; a report plugin
-  (`serve --report plugin.py`, example in [examples/report_plugin.py](examples/report_plugin.py)) defines and
-  validates your own format.
+Each tool result contains one JSON text block with the fields `step_index`, `state`, `result`, `warnings`, `error`
+and `frames`, followed by one PNG image for each view listed in `frames`.
+
+The model submits its final report with `submit_report`, which accepts any JSON object by default. To define and
+validate a custom report format, provide a report plugin with `serve --report plugin.py`. See
+[examples/report_plugin.py](examples/report_plugin.py) for an example.
 
 ## Use from an MCP host
 
-To try it interactively in an MCP host (Claude Desktop, VS Code, Cursor, ...), run `launch` and `case prepare`
-first, then add the server to the host's MCP configuration (for Claude Desktop, `claude_desktop_config.json`):
+To use the server interactively in an MCP host such as Claude Desktop, VS Code or Cursor, run `launch` and
+`case prepare` first. Then add the server to the host's MCP configuration. For example, add the following to
+Claude Desktop's `claude_desktop_config.json`:
 
 ```json
 {
@@ -137,14 +147,15 @@ first, then add the server to the host's MCP configuration (for Claude Desktop, 
 }
 ```
 
-A host shows the model every tool, including the runner-only ones, so the model calls `reset_episode` with the
-`case_id` itself. For evaluations, use your own runner, which hides them.
+In this configuration, the host exposes every tool to the model, including tools intended for the runner. The model
+must call `reset_episode` with the `case_id` to load the case. For evaluations, use your own runner to handle these
+calls and hide the runner-only tools from the model.
 
 ## Tools
 
-The `ct_segments` profile has all 22 model tools; `ct_basic` has 17 (no segmentation tools). Full descriptions and
-argument schemas, exactly as the model receives them: [docs/tools/ct_basic.md](docs/tools/ct_basic.md),
-[docs/tools/ct_segments.md](docs/tools/ct_segments.md).
+The `ct_segments` profile exposes all 22 model tools. The `ct_basic` profile exposes 17 tools and excludes the
+segmentation tools. The full descriptions and argument schemas provided to the model are documented in
+[docs/tools/ct_basic.md](docs/tools/ct_basic.md) and [docs/tools/ct_segments.md](docs/tools/ct_segments.md).
 
 | Group | Tool | What it does |
 |---|---|---|
@@ -152,18 +163,18 @@ argument schemas, exactly as the model receives them: [docs/tools/ct_basic.md](d
 | | `scroll_slice` | Scroll one slice view by a number of slices |
 | | `set_window_preset` | Set the grey-scale window/level of the slice views to a preset |
 | | `jump_to_point` | Move all three slice views through a point [R, A, S] |
-| | `point_at` | Point at a pixel of a slice image: its position and intensity |
+| | `point_at` | Return the position and intensity of a pixel in a slice image |
 | | `measure` | Measure the distance in mm between two pixels of a slice image |
 | 3D view | `orbit` | Rotate the 3D camera about its focal point |
 | | `set_view_direction` | Look at the patient from one side (anterior, left, superior, ...) |
-| | `zoom` | Zoom the 3D view, or with `view: "slices"` the slice views (0.25 to 4 per call) |
+| | `zoom` | Zoom the 3D view, or the slice views with `view: "slices"`, by a factor of 0.25 to 4 per call |
 | | `pan_to` | Move the 3D camera's focal point to a point |
 | | `set_render_preset` | Change the volume-rendering preset |
 | | `set_clip_box` | Crop the 3D rendering to a box |
 | | `set_clip_plane` | Cut away one side of the 3D rendering with a plane |
 | | `clear_clip` | Remove the clip box or plane |
 | Segmentation (`ct_segments`) | `set_segment_visibility` | Show or hide individual structure shells |
-| | `set_segment_opacity` | Set the 3D opacity of one structure shell, or of all |
+| | `set_segment_opacity` | Set the 3D opacity of one or all structure shells |
 | | `set_3d_content` | Show the shells alone, inside the CT, or the CT alone |
 | | `set_slice_outlines` | Turn the structure outlines on the slices on or off |
 | | `center_on_segments` | Centre the 3D view on chosen structures |
@@ -176,31 +187,34 @@ argument schemas, exactly as the model receives them: [docs/tools/ct_basic.md](d
 
 ## Profiles
 
-A profile defines the task the model gets: which tools it may call, the allowed range of each argument, the window
-and render presets, the image size, the segmentation structures and the report format. The server stays the same;
-you change what the model can see and do by changing the profile. Each trace records the profile's hashes, so a
-result names the exact setup it came from. For example, CHD-Bench's three settings (full, no 3D view, no
-segmentation) are three profiles of this server.
+A profile defines the tools available to the model, the allowed range of each argument, the window and rendering
+presets, the image size, the segmentation structures and the report format. Changing the profile changes what the
+model can see and do without changing the server. Each trace records the profile's hashes to identify the exact
+configuration used for that run. For example, CHD-Bench uses three profiles for its full configuration,
+configuration without a 3D view and configuration without segmentation.
 
-A profile is a folder:
+Each profile is a folder containing the following files:
 
-| File | Sets |
+| File | Purpose |
 |---|---|
 | `protocol.json` | the tool allowlist, argument bounds, presets, image size and segmentation structures |
 | `presets.xml` (optional) | the profile's own volume-rendering presets, added to Slicer's stock ones |
 | `report.py` (optional) | the report format `submit_report` accepts, and its validation |
 
-Two examples ship here: `ct_basic` (17 tools, no segmentation) and `ct_segments` (22 tools, a label map shown as
-hollow shells). A profile with a segmentation needs the label map when you prepare the case:
+This repository includes two example profiles. The `ct_basic` profile provides 17 tools without segmentation.
+The `ct_segments` profile provides 22 tools and displays a label map as hollow shells. For a profile that uses
+segmentation, provide the label map when preparing the case:
 
 ```bash
 uv run slicer-mcp case prepare --profile ct_segments --volume ct.nii.gz --labels labels.nii.gz \
     --label-map 1=liver,2=spleen,3=kidney_left,4=kidney_right,5=aorta,6=pancreas
 ```
 
-Bring your own with `--profile /path/to/profile`. All commands and options: [docs/CLI.md](docs/CLI.md).
+To use your own profile, pass `--profile /path/to/profile`. See [docs/CLI.md](docs/CLI.md) for all commands and options.
 
 ## Headless Linux
+
+Install Slicer, Xvfb and the required libraries without sudo, then open a shell on a virtual display:
 
 ```bash
 uv run slicer-mcp setup-headless    # Xvfb, Slicer 5.10.0 and missing libraries, no sudo; writes config/runtime.local.json
@@ -208,20 +222,24 @@ uv run slicer-mcp xvfb-session --runtime config/runtime.local.json -- bash   # a
 ```
 
 For parallel runs, give each job its own runtime copy with `"bridge_port": "auto"` and its own state file, cases and
-traces folders. Mesa (CPU) frames differ slightly from GPU frames, so keep one comparison on one kind of machine.
+traces folders. Frames rendered by Mesa on the CPU differ slightly from frames rendered on a GPU. Use the same
+rendering hardware for runs whose frames you intend to compare.
 
 ## Security
 
 - The model can only call the profile's named tools. Any other call is refused and logged. There is no code
-  execution: the bridge has no exec route.
+  execution route in the bridge.
 - Every argument is validated against its schema and the profile's bounds; out-of-range values are clamped, with a
   warning in the result.
-- The bridge listens on 127.0.0.1 only and needs the token of the current launch.
+- The bridge listens only on 127.0.0.1 and requires the token generated for the current launch.
 - `case prepare` copies the scan into a temporary anonymised case, so the model never sees file names or patient
   fields. It cannot remove text burned into the images: use de-identified scans.
-- Report plugins (`serve --report`) are Python that runs in the server: use only plugins you trust.
+- Report plugins (`serve --report`) execute Python code in the server. Use only plugins you trust.
 
 ## Tests
+
+Run the unit tests without Slicer. The live tests require a running Slicer instance started with `launch` and the
+`SLICER_MCP_TEST_VOLUME` environment variable set to the path of a CT file, such as a NIfTI file.
 
 ```bash
 uv run pytest -q                        # unit tests, no Slicer
@@ -232,4 +250,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Apache-2.0 ([LICENSE](LICENSE)).
+This repository is licensed under Apache-2.0. See [LICENSE](LICENSE).

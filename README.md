@@ -23,7 +23,6 @@ Version 0.1.0 (research release). The 0.1.0 tool surface is frozen so results st
 ## Features
 
 - **Secure:** only named, typed tools; no exec route; the bridge listens on 127.0.0.1 and requires a per-launch token.
-- **Bounded:** every argument is range-checked and clamped with a warning.
 - **Clinical input:** DICOM folders, NIfTI, NRRD, converted to temporary anonymised cases.
 - **Task profiles:** one folder sets the tool allowlist, image size, presets, bounds and the report format.
 - **Auditable:** per-call traces stamped with the profile's hashes; `replay` re-renders a trace and compares frames.

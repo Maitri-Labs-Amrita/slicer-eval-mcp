@@ -1,7 +1,7 @@
 # slicer-mcp
 
 An MCP server that lets vision-language-model agents operate [3D Slicer](https://www.slicer.org). The model examines
-a CT through named, bounded tools (3D view control, rendering presets, clipping, slices, measurements, segmentation
+a volumetric scan through named, bounded tools (3D view control, rendering presets, clipping, slices, measurements, segmentation
 display); there is no code execution. Every call is logged with its arguments, the resulting state and the images,
 so a session can be audited, replayed and scored.
 

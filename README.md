@@ -1,10 +1,11 @@
-# slicer-mcp
+# slicer-eval-mcp
 
-slicer-mcp is an MCP server through which vision-language model agents operate [3D Slicer](https://www.slicer.org).
+slicer-eval-mcp is an MCP server through which vision-language model agents operate [3D Slicer](https://www.slicer.org).
 The model examines a volumetric scan using tools for controlling the 3D view, selecting rendering presets,
 clipping, viewing slices, taking measurements and displaying segmentations. The tools do not execute model-generated
 code. Every tool call is logged with its arguments, the resulting state and the images, so a session can be
 audited, replayed and scored.
+Its command and Python package are named `slicer-mcp`.
 
 ![3D Slicer and the MCP tool groups](docs/images/overview.png)
 
@@ -62,11 +63,11 @@ In `config/runtime.local.json`, set `slicer_executable` to the path of your Slic
 ### Use in a benchmark
 
 The package includes the Slicer bridge and its helper scripts, so you can use it as a dependency in your own
-benchmark. Your runner manages cases and model calls, while slicer-mcp provides the Slicer tools and session
+benchmark. Your runner manages cases and model calls, while slicer-eval-mcp provides the Slicer tools and session
 traces. [CHD-Bench](https://github.com/Maitri-Labs-Amrita/CHD-Bench) uses this structure to evaluate agents on
 cardiac CT and MRI scans.
 
-For example, run the following command from your benchmark project to add slicer-mcp as a dependency. Replace
+For example, run the following command from your benchmark project to add slicer-eval-mcp as a dependency. Replace
 `<commit>` with the commit you want to use so your benchmark uses a fixed version:
 
 ```bash

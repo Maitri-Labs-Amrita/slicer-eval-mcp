@@ -1,7 +1,7 @@
 # slicer-mcp
 
 An MCP server that lets vision-language-model agents operate [3D Slicer](https://www.slicer.org). The model examines
-a volumetric scan through named, bounded tools (3D view control, rendering presets, clipping, slices, measurements, segmentation
+a volumetric scan through named tools (3D view control, rendering presets, clipping, slices, measurements, segmentation
 display); there is no code execution. Every call is logged with its arguments, the resulting state and the images,
 so a session can be audited, replayed and scored.
 
@@ -62,10 +62,16 @@ Installed this way, relative paths in the runtime config (cases, traces, logs) a
 
 ## Quick start
 
+On a Linux server without a screen, first open a shell on a virtual display and run everything below inside it:
+
+```bash
+uv run slicer-mcp xvfb-session --runtime config/runtime.local.json -- bash
+```
+
 ```bash
 uv run slicer-mcp launch --profile ct_basic                 # start Slicer with the bridge
 uv run slicer-mcp case prepare --volume scan.nii.gz         # or --dicom <folder>; prints case_id and lease
-uv run slicer-mcp serve --profile ct_basic                  # the MCP server (your client starts it over stdio)
+# ... run your client (next section); it starts `slicer-mcp serve` itself
 uv run slicer-mcp case remove <case_id> --lease <lease>
 uv run slicer-mcp launch --stop
 ```
@@ -73,8 +79,12 @@ uv run slicer-mcp launch --stop
 To try it without a model, run the scripted client, which calls every tool:
 
 ```bash
-uv run python examples/scripted_episode.py out/ <case_id> slicer_mcp/ -- uv run slicer-mcp serve --profile ct_basic
+uv run python examples/scripted_episode.py out/ <case_id> slicer_mcp/ -- \
+    uv run slicer-mcp serve --profile ct_basic --runtime config/runtime.local.json
 ```
+
+`out/` gets the replies; `slicer_mcp/` is the prefix of the extra fields it logs with each call. With `ct_basic`,
+the 5 segmentation tools are refused: that shows the tool allowlist working, not a failure.
 
 Traces go to `traces/<episode_id>/` (`steps.jsonl`, `frames/`, the report).
 
@@ -87,7 +97,8 @@ import asyncio, json
 from mcp import Client, StdioServerParameters
 
 async def main():
-    server = StdioServerParameters(command="uv", args=["run", "slicer-mcp", "serve", "--profile", "ct_basic"])
+    server = StdioServerParameters(command="uv", args=["run", "slicer-mcp", "serve", "--profile", "ct_basic",
+                                                       "--runtime", "config/runtime.local.json"])
     async with Client(server) as c:
         tools = [t for t in (await c.list_tools()).tools
                  if not (t.meta or {}).get("slicer_mcp/runner_only")]   # give only these to the model
@@ -147,21 +158,10 @@ traces folders. Mesa (CPU) frames differ slightly from GPU frames, so keep one c
 
 ```bash
 uv run pytest -q                        # unit tests, no Slicer
-uv run pytest -m slicer tests/slicer    # live tests: a running launch and SLICER_MCP_TEST_VOLUME=<your CT>
+uv run pytest -m slicer tests/slicer    # live tests: a running launch and SLICER_MCP_TEST_VOLUME=<a CT file, e.g. NIfTI>
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Citation
-
-```bibtex
-@inproceedings{TODO,
-  title     = {TODO},
-  author    = {TODO},
-  booktitle = {TODO},
-  year      = {TODO}
-}
-```
 
 ## License
 

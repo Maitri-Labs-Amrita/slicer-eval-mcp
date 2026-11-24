@@ -72,8 +72,25 @@ Traces go to `traces/<episode_id>/` (`steps.jsonl`, `frames/`, the report).
 
 ## Using it from an MCP client
 
-- The client calls `reset_episode` with the `case_id`, then the model calls the tools. `reset_episode`,
-  `end_episode` and `observe` are marked `_meta {"slicer_mcp/runner_only": true}`; hide them from the model.
+After `launch` and `case prepare` (Quick start), a client runs one episode like this:
+
+```python
+import asyncio, json
+from mcp import Client, StdioServerParameters
+
+async def main():
+    server = StdioServerParameters(command="uv", args=["run", "slicer-mcp", "serve", "--profile", "ct_basic"])
+    async with Client(server) as c:
+        tools = [t for t in (await c.list_tools()).tools
+                 if not (t.meta or {}).get("slicer_mcp/runner_only")]   # give only these to the model
+        await c.call_tool("reset_episode", {"case_id": "<case_id>"})    # load the case (runner only)
+        res = await c.call_tool("orbit", {"azimuth_deg": 30})           # a model's tool call
+        print(json.loads(res.content[0].text)["state"])
+        await c.call_tool("end_episode", {})                            # close the episode (runner only)
+
+asyncio.run(main())
+```
+
 - Each result is one JSON text block `{step_index, state, result, warnings, error, frames}` followed by one PNG per
   view in `frames`.
 - The model ends the session with `submit_report`. By default it takes any JSON object; a report plugin

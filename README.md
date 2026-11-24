@@ -99,9 +99,22 @@ asyncio.run(main())
 
 ## Profiles
 
-A profile is a folder with `protocol.json` (tools, bounds, presets, classes), optional `presets.xml` and an optional
-`report.py`. Two examples ship here: `ct_basic` (17 tools, no segmentation) and `ct_segments` (22 tools, a label map
-shown as hollow shells):
+A profile defines the task the model gets: which tools it may call, the allowed range of each argument, the window
+and render presets, the image size, the segmentation structures and the report format. The server stays the same;
+you change what the model can see and do by changing the profile. Each trace records the profile's hashes, so a
+result names the exact setup it came from. For example, CHD-Bench's three settings (full, no 3D view, no
+segmentation) are three profiles of this server.
+
+A profile is a folder:
+
+| File | Sets |
+|---|---|
+| `protocol.json` | the tool allowlist, argument bounds, presets, image size and segmentation structures |
+| `presets.xml` (optional) | the profile's own volume-rendering presets, added to Slicer's stock ones |
+| `report.py` (optional) | the report format `submit_report` accepts, and its validation |
+
+Two examples ship here: `ct_basic` (17 tools, no segmentation) and `ct_segments` (22 tools, a label map shown as
+hollow shells). A profile with a segmentation needs the label map when you prepare the case:
 
 ```bash
 uv run slicer-mcp case prepare --profile ct_segments --volume ct.nii.gz --labels labels.nii.gz \

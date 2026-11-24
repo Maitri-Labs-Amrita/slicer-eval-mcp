@@ -30,8 +30,7 @@ Version 0.1.0. The tools are frozen at this version so results reproduce.
 ## Installation
 
 Requirements: Linux or macOS, [uv](https://docs.astral.sh/uv/), and
-[3D Slicer 5.10.0](https://download.slicer.org/) (macOS: the x86_64 build; Linux servers: see
-[Headless Linux](#headless-linux)).
+[3D Slicer 5.10.0](https://download.slicer.org/) (macOS: the x86_64 build).
 
 ```bash
 git clone https://github.com/Maitri-Labs-Amrita/slicer-eval-mcp.git

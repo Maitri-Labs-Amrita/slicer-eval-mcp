@@ -1,4 +1,4 @@
-# slicer-mcp command reference
+# slicer-eval-mcp command reference
 
 The `--help` text of every `slicer-mcp` command, as of version 0.1.0 (run them with `uv run`). Each command also
 reads `$SLICER_MCP_RUNTIME` (the runtime config) and `$SLICER_MCP_PROFILE` (the default profile) where it takes one.

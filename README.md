@@ -17,8 +17,7 @@ MCP client ──stdio──► slicer-mcp serve --profile P ──HTTP 127.0.0.
                        enforces the tool allowlist, writes the trace)            coronal views)
 ```
 
-Version 0.1.0 (research release). The 0.1.0 tool surface is frozen so results stay reproducible; see
-[ROADMAP.md](ROADMAP.md).
+Version 0.1.0. The tools are frozen at this version so results reproduce.
 
 ## Features
 

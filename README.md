@@ -39,8 +39,18 @@ cd slicer-eval-mcp
 uv sync --inexact
 ```
 
-Machine settings (Slicer path, bridge port, data folders) go in `config/runtime.local.json`, a copy of
-`config/runtime.json`; pass it with `--runtime` or `SLICER_MCP_RUNTIME`. The default Slicer path is the macOS one.
+Then tell slicer-mcp where 3D Slicer is on your machine. On a Linux server, `uv run slicer-mcp setup-headless`
+does this ([Headless Linux](#headless-linux)). Otherwise:
+
+```bash
+cp config/runtime.json config/runtime.local.json      # your copy (gitignored)
+export SLICER_MCP_RUNTIME=config/runtime.local.json   # every slicer-mcp command now reads it
+```
+
+In `config/runtime.local.json`, set `slicer_executable` to your Slicer, e.g.
+`"/Applications/Slicer.app/Contents/MacOS/Slicer"` (macOS, the default) or
+`"/opt/Slicer-5.10.0-linux-amd64/Slicer"` (Linux). The file also sets the local port Slicer listens on
+(`bridge_port`, 2017) and the folders for prepared cases (`cases_dir`) and run traces (`traces_dir`).
 
 **As a dependency of another project.** The package ships the Slicer bridge and its helper scripts, so it can be
 installed like any library, pinned to a commit:
